@@ -208,4 +208,3 @@ static class UserUtils
     public static int GenerateRandomValue(int min, int max) =>
         s_random.Next(min, max);
 }
-
