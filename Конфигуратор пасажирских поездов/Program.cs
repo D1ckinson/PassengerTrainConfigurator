@@ -2,279 +2,166 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Конфигуратор_пассажирских_поездов
+namespace PassengerTrainConfigurator
 {
-    internal class Program
+    public class Program
     {
         static void Main()
         {
-            const char CreatePathCommand = '1';
-            const char SkipTimeCommand = '2';
-            const char ExitProgramCommand = '3';
-
-            char userKey;
-            bool isRunning = true;
-            string input;
-
-            Dictionary<char, string> commandsDescriptions = new Dictionary<char, string>
-            {
-                { CreatePathCommand, "Создать путь." },
-                { SkipTimeCommand, "Пропустить время." },
-                { ExitProgramCommand, "Выход." }
-            };
-
             RailwayDepot railwayDepot = new RailwayDepot();
 
-            while (isRunning)
-            {
-                Console.Clear();
-
-                railwayDepot.DrawTrainsInfo();
-
-                foreach (var item in commandsDescriptions)
-                    Console.WriteLine($"{item.Key} - {item.Value}");
-
-                Console.Write("Введите команду:");
-
-                input = Console.ReadLine();
-
-                if (input == "")
-                    userKey = ' ';
-                else
-                    userKey = input[0];
-
-                switch (userKey)
-                {
-                    case CreatePathCommand:
-                        railwayDepot.CreatePath();
-                        break;
-
-                    case SkipTimeCommand:
-                        railwayDepot.SkipTime();
-                        break;
-
-                    case ExitProgramCommand:
-                        isRunning = false;
-                        break;
-                }
-            }
+            railwayDepot.Work();
         }
     }
 
     class RailwayDepot
     {
-        private readonly int _shortDistance = 1;
-        private readonly int _mediumDistance = 3;
-        private readonly int _longDistance = 4;
-
-        private readonly int _minPassengersQuantity = 70;
-        private readonly int _maxPassengersQuantity = 300;
-
-        private Random _random = new Random();
-
         private List<Train> _trains = new List<Train>();
 
-        private readonly string[] _cities = { "Санкт-Петербург", "Москва", "Казань", "Екатеринбург", "Челябинск", "Тюмень" };
-
-        public void CreatePath()
+        private List<string> _cities = new List<string>
         {
-            List<string> cities = _cities.ToList();
+            "Санкт-Петербург", "Тверь", "Москва",
+            "Рязань", "Саранск", "Самара",
+            "Уфа", "Челябинск", "Екатеринбург"
+        };
 
-            bool isDirectionOfMovementToRight = false;
-            string departureCity = cities[ChooseCity("отправления", cities)];
+        public void Work()
+        {
+            const string CreateTrainCommand = "1";
+            const string ExitCommand = "2";
 
-            cities.Remove(departureCity);
+            bool isWork = true;
 
-            string arrivalCity = cities[ChooseCity("прибытия", cities)];
-            int stopsQuantity = Array.FindIndex(_cities, city => city == departureCity) - Array.FindIndex(_cities, city => city == arrivalCity);
-            int passengersQuantity = _random.Next(_minPassengersQuantity, _maxPassengersQuantity);
-
-            if (stopsQuantity < 0)
+            while (isWork)
             {
-                stopsQuantity *= -1;
-                isDirectionOfMovementToRight = true;
+                _trains.ForEach(train => train.WriteInfo());
+
+                Console.WriteLine(
+                        $"\nМеню:\n" +
+                        $"{CreateTrainCommand} - Создать поезд\n" +
+                        $"{ExitCommand} - Выход\n");
+
+                switch (UserUtils.ReadString("Введите команду:"))
+                {
+                    case CreateTrainCommand:
+                        CreateTrain();
+                        break;
+
+                    case ExitCommand:
+                        isWork = false;
+                        break;
+
+                    default:
+                        break;
+                }
+
+                Console.Clear();
+            }
+        }
+
+        private void CreateTrain()
+        {
+            int passengersQuantity = RandomPassengers();
+
+            Direction direction = CreateDirection();
+            List<Railcar> railcars = CreateRailcars(passengersQuantity);
+
+            _trains.Add(new Train(railcars, direction, passengersQuantity));
+        }
+
+        private int RandomPassengers()
+        {
+            int minPassengers = 100;
+            int maxPassengers = 400;
+
+            return UserUtils.GenerateRandomValue(minPassengers, maxPassengers);
+        }
+
+        private List<Railcar> CreateRailcars(int passengersQuantity)
+        {
+            List<Railcar> railcars = new List<Railcar>();
+
+            while (passengersQuantity > 0)
+            {
+                Railcar railcar = new Railcar(RandomSeats());
+
+                passengersQuantity -= railcar.Seats;
+                railcars.Add(railcar);
             }
 
-            List<Railcar> railcars = CreateTrainComposition(passengersQuantity, stopsQuantity);
-
-            _trains.Add(new Train(departureCity, arrivalCity, _cities, railcars, isDirectionOfMovementToRight));
+            return railcars;
         }
 
-        private List<Railcar> CreateTrainComposition(int passengersQuantity, int stopsQuantity)
+        private int RandomSeats()
         {
-            if (stopsQuantity >= _longDistance)
-                return FillTrainLongDistance(passengersQuantity, passengersQuantity / new CompartmentRailcar().Seats);
+            int minSeats = 40;
+            int maxSeats = 100;
 
-            if (stopsQuantity >= _mediumDistance)
-                return FillTrainMediumDistance(passengersQuantity, passengersQuantity / new ReservedRailcar().Seats);
-
-            if (stopsQuantity >= _shortDistance)
-                return FillTrainShortDistance(passengersQuantity, passengersQuantity / new SittingRailcar().Seats);
-
-            return null;
+            return UserUtils.GenerateRandomValue(minSeats, maxSeats);
         }
 
-        private List<Railcar> FillTrainLongDistance(int passengersQuantity, int railcarQuantity)
+        private Direction CreateDirection()
         {
-            List<Railcar> trainComposition = new List<Railcar>();
+            string departureCity = ChoseCity(_cities);
+            string arrivalCity = ChoseCity(_cities.Where(city => city != departureCity).ToList());
 
-            for (int i = 0; i < railcarQuantity; i++)
+            return new Direction(departureCity, arrivalCity);
+        }
+
+        private string ChoseCity(List<string> cities)
+        {
+            int index;
+
+            do
             {
-                CompartmentRailcar railcar = new CompartmentRailcar();
-                railcar.Passengers = railcar.Seats;
+                Console.WriteLine("Список городов:");
 
-                trainComposition.Add(railcar);
+                for (int i = 0; i < cities.Count; i++)
+                    Console.WriteLine($"{i + 1} - {cities[i]}");
+
+                index = UserUtils.ReadInt("Выберите город отправления: ") - 1;
+
+            } while (IsIndexInRange(index, cities, "Города с таким номером нет") == false);
+
+            return _cities[index];
+        }
+
+        private bool IsIndexInRange(int index, List<string> enumerator, string errorText)
+        {
+            if (index < 0 || index >= enumerator.Count)
+            {
+                Console.WriteLine(errorText);
+
+                return false;
             }
 
-            CompartmentRailcar lastRailcar = new CompartmentRailcar();
-            lastRailcar.Passengers = passengersQuantity - lastRailcar.Seats * railcarQuantity;
-
-            trainComposition.Add(lastRailcar);
-
-            return trainComposition;
-        }
-
-        private List<Railcar> FillTrainMediumDistance(int passengersQuantity, int railcarQuantity)
-        {
-            List<Railcar> trainComposition = new List<Railcar>();
-
-            for (int i = 0; i < railcarQuantity; i++)
-            {
-                ReservedRailcar railcar = new ReservedRailcar();
-                railcar.Passengers = railcar.Seats;
-
-                trainComposition.Add(railcar);
-            }
-
-            ReservedRailcar lastRailcar = new ReservedRailcar();
-            lastRailcar.Passengers = passengersQuantity - lastRailcar.Seats * railcarQuantity;
-
-            trainComposition.Add(lastRailcar);
-
-            return trainComposition;
-        }
-
-        private List<Railcar> FillTrainShortDistance(int passengersQuantity, int railcarQuantity)
-        {
-            List<Railcar> trainComposition = new List<Railcar>();
-
-            for (int i = 0; i < railcarQuantity; i++)
-            {
-                SittingRailcar railcar = new SittingRailcar();
-                railcar.Passengers = railcar.Seats;
-
-                trainComposition.Add(railcar);
-            }
-
-            SittingRailcar lastRailcar = new SittingRailcar();
-            lastRailcar.Passengers = passengersQuantity - lastRailcar.Seats * railcarQuantity;
-
-            trainComposition.Add(lastRailcar);
-
-            return trainComposition;
-        }
-
-        public void SkipTime()
-        {
-            List<Train> trainsToRemove = new List<Train>();
-
-            _trains.ForEach(train =>
-            {
-                train.Move();
-
-                if (train.HasTrainArrive())
-                    trainsToRemove.Add(train);
-            });
-
-            trainsToRemove?.ForEach(train => _trains.Remove(train));
-        }
-
-        public void DrawTrainsInfo() => _trains.ForEach((train) =>
-            Console.WriteLine($"Поезд {train.DepartureCity} - {train.ArrivalCity}" +
-                $" сейчас находится в {train.CurrentCity}, следующая остановка {train.TellNextCity()}." +
-                $"\nКоличество вагонов в поезде - {train.Size}. Количество пассажиров - {train.TellPassengersQuantity()}.\n"));
-
-        private int ChooseCity(string info, List<string> cities)
-        {
-            Console.WriteLine($"\nВыберите город {info}:");
-
-            for (int i = 0; i < cities.Count; i++)
-                Console.WriteLine($"{i + 1} - {cities[i]}.");
-
-            int userInput = 0;
-            bool isIndexInListBorder = false;
-
-            while (isIndexInListBorder == false)
-            {
-                userInput = ReadInt();
-
-                userInput--;
-
-                if (userInput >= 0 && userInput < cities.Count)
-                    isIndexInListBorder = true;
-                else
-                    Console.WriteLine("Города с таким номером нет, попробуйте еще раз.");
-            }
-
-            return userInput;
-        }
-
-        private int ReadInt()
-        {
-            int number;
-
-            while (int.TryParse(Console.ReadLine(), out number) == false)
-                Console.Write("\nВведите число:");
-
-            return number;
+            return true;
         }
     }
 
     class Train
     {
-        private readonly List<Railcar> _railcars;
+        private List<Railcar> _railcars;
+        private Direction _direction;
+        private int _seatsQuantity;
+        private int _passengersQuantity;
 
-        private readonly bool _isDirectionOfMovementToRight;
-
-        private readonly string[] _cities;
-
-        public Train(string departureCity, string arrivalCity, string[] cities, List<Railcar> railcars, bool isDirectionOfMovementToRight)
+        public Train(List<Railcar> railcars, Direction direction, int passengersQuantity)
         {
-            _cities = cities;
             _railcars = railcars;
-            _isDirectionOfMovementToRight = isDirectionOfMovementToRight;
-            DepartureCity = departureCity;
-            CurrentCity = departureCity;
-            ArrivalCity = arrivalCity;
+            _direction = direction;
+            _passengersQuantity = passengersQuantity;
+            _seatsQuantity = _railcars.Sum(railcar => railcar.Seats);
         }
 
-        public string ArrivalCity { get; private set; }
-        public string DepartureCity { get; private set; }
-        public string CurrentCity { get; private set; }
-        public int Size => _railcars.Count();
-
-        public string TellNextCity()
+        public void WriteInfo()
         {
-            int cityIndex = Array.IndexOf(_cities, CurrentCity);
-
-            return _isDirectionOfMovementToRight ? _cities[cityIndex + 1] : _cities[cityIndex - 1];
-        }
-
-        public void Move() => CurrentCity = TellNextCity();
-
-        public bool HasTrainArrive() => ArrivalCity == CurrentCity;
-
-        public int TellPassengersQuantity()
-        {
-            int passengers = 0;
-
-            _railcars.ForEach(railcar => passengers += railcar.Passengers);
-
-            return passengers;
+            Console.WriteLine($"Поезд {_direction.DepartureCity} - {_direction.ArrivalCity} " +
+                $"везет {_passengersQuantity} пассажиров и имеет {_railcars.Count} вагонов с {_seatsQuantity} сидений");
         }
     }
 
-    abstract class Railcar
+    class Railcar
     {
         public Railcar(int seats)
         {
@@ -282,21 +169,43 @@ namespace Конфигуратор_пассажирских_поездов
         }
 
         public int Seats { get; private set; }
-        public int Passengers { get; set; }
-    }
-
-    class SittingRailcar : Railcar
-    {
-        public SittingRailcar() : base(68) { }
-    }
-
-    class ReservedRailcar : Railcar
-    {
-        public ReservedRailcar() : base(54) { }
-    }
-
-    class CompartmentRailcar : Railcar
-    {
-        public CompartmentRailcar() : base(32) { }
     }
 }
+
+class Direction
+{
+    public Direction(string departureCity, string arrivalCity)
+    {
+        DepartureCity = departureCity;
+        ArrivalCity = arrivalCity;
+    }
+
+    public string DepartureCity { get; private set; }
+    public string ArrivalCity { get; private set; }
+}
+
+static class UserUtils
+{
+    private static Random s_random = new Random();
+
+    public static int ReadInt(string text)
+    {
+        int number;
+
+        while (int.TryParse(ReadString(text), out number) == false)
+            Console.WriteLine("Некорректный ввод. Введите число.");
+
+        return number;
+    }
+
+    public static string ReadString(string text)
+    {
+        Console.Write(text);
+
+        return Console.ReadLine();
+    }
+
+    public static int GenerateRandomValue(int min, int max) =>
+        s_random.Next(min, max);
+}
+
